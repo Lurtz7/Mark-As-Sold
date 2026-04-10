@@ -1,0 +1,16 @@
+{
+    "admin": {
+        "settings": {
+            "default_controller": "settings",
+            "protected": 0,
+            "default": 1
+        }
+    },
+    "front": {
+        "markassold": {
+            "default_controller": "toggle",
+            "protected": 0,
+            "default": 1
+        }
+    }
+}

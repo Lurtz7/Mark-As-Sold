@@ -1,0 +1,7 @@
+{
+    "core": {
+        "ContentMenu": {
+            "MarkAsSold": "IPS\\markassold\\extensions\\core\\ContentMenu\\MarkAsSold"
+        }
+    }
+}
