@@ -1,5 +1,7 @@
 {
-	"markassold_settings": {
-		"markassold_settings_manage": ""
-	}
+    "settings": {
+        "settings": {
+            "markassold_settings_manage": "markassold_settings_manage"
+        }
+    }
 }
