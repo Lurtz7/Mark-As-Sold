@@ -74,13 +74,13 @@ class toggle extends Controller
 		$tagName     = \IPS\Settings::i()->markassold_tag ?: 'Sold';
 		$currentTags = $topic->tags();
 		$prefix      = $topic->prefix();
-		$isSold      = \in_array( $tagName, $currentTags );
+		$isSold      = \IPS\markassold\extensions\core\UIItem\MarkAsSold::isSold( $topic );
 
 		if ( $isSold )
 		{
-			/* Remove the sold tag, keep everything else */
+			/* Remove the sold tag (case-insensitive), keep everything else */
 			$newTags = array_values( array_filter( $currentTags, function( $tag ) use ( $tagName ) {
-				return $tag !== $tagName;
+				return mb_strtolower( $tag ) !== mb_strtolower( $tagName );
 			} ) );
 
 			/* Re-add prefix if there was one */
