@@ -8,6 +8,7 @@
 $lang = array(
 
 	'__app_markassold'				=> "Mark As Sold",
+	'__app_markassold_description'	=> "Allows topic creators and moderators to mark forum topics as sold by toggling a tag.",
 
 	// Module names
 	'module__markassold_markassold'	=> "Mark As Sold",
