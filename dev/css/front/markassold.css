@@ -1,0 +1,28 @@
+/**
+ * Mark As Sold — Tag Styling
+ *
+ * Targets the sold tag in IPS5's tag display.
+ * The --markassold-bg and --markassold-text custom properties
+ * are set dynamically from plugin settings.
+ *
+ * IPS5 renders tags as <a> elements within a tag list.
+ * We target by the data-tag attribute or tag text content.
+ * Adjust the selector below if your IPS5 theme uses different markup.
+ */
+
+:root {
+	--markassold-bg: #e74c3c;
+	--markassold-text: #ffffff;
+}
+
+/* Target the sold tag — IPS5 typically renders tags with a data-tag attribute */
+.ipsTag[data-tag="Sold"],
+.ipsTag[data-tag="Såld"],
+.ipsTag.ipsTag--sold {
+	background-color: var(--markassold-bg) !important;
+	color: var(--markassold-text) !important;
+	font-weight: 700;
+	border: none !important;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
