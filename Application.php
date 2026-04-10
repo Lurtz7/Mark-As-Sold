@@ -20,32 +20,17 @@ class _Application extends \IPS\Application
 	}
 
 	/**
-	 * Initialize application — called by IPS when the app is loaded.
-	 * Injects dynamic CSS for the sold tag styling.
+	 * Output CSS files
+	 *
+	 * Called by IPS when this application's CSS should be loaded.
+	 * Injects dynamic CSS for the sold tag styling based on admin settings.
 	 *
 	 * @return void
 	 */
-	public function init(): void
+	public static function outputCss(): void
 	{
-		parent::init();
+		parent::outputCss();
 
-		/* Only inject CSS on front-end pages */
-		if ( \IPS\Dispatcher::hasInstance() && \IPS\Dispatcher::i()->controllerLocation === 'front' )
-		{
-			$this->outputCss();
-		}
-	}
-
-	/**
-	 * Output CSS custom properties for tag colors
-	 *
-	 * Adds an inline style block with the admin-configured colors
-	 * as CSS custom properties, targeting the configured tag name.
-	 *
-	 * @return void
-	 */
-	protected function outputCss(): void
-	{
 		$bgColor   = \IPS\Settings::i()->markassold_bg_color ?: '#e74c3c';
 		$textColor = \IPS\Settings::i()->markassold_text_color ?: '#ffffff';
 		$tagName   = \IPS\Settings::i()->markassold_tag ?: 'Sold';
@@ -63,13 +48,6 @@ class _Application extends \IPS\Application
 		/* Sanitize tag name for safe CSS selector injection */
 		$tagName = htmlspecialchars( $tagName, ENT_QUOTES, 'UTF-8' );
 
-		/*
-		 * Inject inline CSS. IPS5 may use \IPS\Output::i()->headCss,
-		 * \IPS\Output::i()->inlineStyles, or another property.
-		 * Verify against your IPS5 source at system/Output/Output.php.
-		 * If headCss is not available, try adding to endOfBody or
-		 * use a globalTemplate theme hook instead.
-		 */
 		$css = "<style>
 :root {
 	--markassold-bg: {$bgColor};
