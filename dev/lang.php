@@ -39,6 +39,9 @@ $lang = array(
 	'markassold_text_color'			=> "Tag Text Color",
 	'markassold_text_color_desc'	=> "Text color for the Sold tag badge.",
 
+	// AdminCP restrictions
+	'r__markassold_settings_manage'	=> "Can manage Mark As Sold settings?",
+
 	// AdminCP menu
 	'menu__markassold_settings'				=> "Mark As Sold",
 	'menu__markassold_settings_settings'	=> "Settings",

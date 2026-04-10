@@ -1,1 +1,11 @@
-{}
+{
+    "app=markassold&module=settings&controller=settings": {
+        "lang_key": "markassold_settings_title",
+        "restriction": "markassold_settings_manage",
+        "keywords": [
+            "mark as sold",
+            "sold",
+            "tag"
+        ]
+    }
+}
