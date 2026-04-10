@@ -7,7 +7,9 @@
 
 namespace IPS\markassold;
 
-class _Application extends \IPS\Application
+use IPS\Application as SystemApplication;
+
+class Application extends SystemApplication
 {
 	/**
 	 * Icon for the application in AdminCP

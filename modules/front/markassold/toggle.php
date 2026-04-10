@@ -8,12 +8,20 @@
 namespace IPS\markassold\modules\front\markassold;
 
 use IPS\Dispatcher;
+use IPS\Dispatcher\Controller;
 use IPS\Output;
 use IPS\Request;
 use IPS\Member;
 use IPS\Settings;
 
-class _toggle extends \IPS\Dispatcher\Controller
+/* To prevent PHP errors (extending class does not exist) revealing path */
+if ( !defined( '\IPS\SUITE_UNIQUE_KEY' ) )
+{
+	header( ( $_SERVER['SERVER_PROTOCOL'] ?? 'HTTP/1.0' ) . ' 403 Forbidden' );
+	exit;
+}
+
+class toggle extends Controller
 {
 	/**
 	 * Execute
