@@ -51,49 +51,13 @@ class _toggle extends \IPS\Dispatcher\Controller
 			return;
 		}
 
-		/* Check if the forum is enabled */
-		$enabledForums = Settings::i()->markassold_forums;
-		if ( empty( $enabledForums ) )
+		/* Use shared permission check */
+		$member = Member::loggedIn();
+		if ( !\IPS\markassold\Application::canToggleSold( $topic, $member ) )
 		{
 			Output::i()->error(
 				Member::loggedIn()->language()->addToStack( 'markassold_no_permission' ),
 				'2MAS01/2',
-				403
-			);
-			return;
-		}
-
-		$enabledForumIds = explode( ',', $enabledForums );
-		if ( !\in_array( $topic->forum_id, $enabledForumIds ) )
-		{
-			Output::i()->error(
-				Member::loggedIn()->language()->addToStack( 'markassold_no_permission' ),
-				'2MAS01/3',
-				403
-			);
-			return;
-		}
-
-		/* Check permissions: topic author or moderator */
-		$member = Member::loggedIn();
-		if ( !$member->member_id )
-		{
-			Output::i()->error(
-				Member::loggedIn()->language()->addToStack( 'markassold_no_permission' ),
-				'2MAS01/4',
-				403
-			);
-			return;
-		}
-
-		$isAuthor    = ( (int) $topic->starter_id === (int) $member->member_id );
-		$isModerator = $member->modPermission( 'can_close_open' ) || $member->isAdmin();
-
-		if ( !$isAuthor && !$isModerator )
-		{
-			Output::i()->error(
-				Member::loggedIn()->language()->addToStack( 'markassold_no_permission' ),
-				'2MAS01/5',
 				403
 			);
 			return;
@@ -188,9 +152,8 @@ class _toggle extends \IPS\Dispatcher\Controller
 		) );
 
 		$member = Member::loggedIn();
-		$position = 0;
 
-		/* Re-insert prefix if it existed and is not in the new tags */
+		/* Re-insert prefix if it existed */
 		if ( $existingPrefix )
 		{
 			\IPS\Db::i()->insert( 'core_tags', array(
@@ -205,7 +168,6 @@ class _toggle extends \IPS\Dispatcher\Controller
 				'tag_prefix'         => 1,
 				'tag_text'           => $existingPrefix,
 			) );
-			$position++;
 		}
 
 		foreach ( $tags as $tag )
@@ -227,7 +189,6 @@ class _toggle extends \IPS\Dispatcher\Controller
 				'tag_prefix'         => 0,
 				'tag_text'           => $tag,
 			) );
-			$position++;
 		}
 
 		/* Clear tag cache on the topic */

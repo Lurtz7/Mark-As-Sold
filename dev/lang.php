@@ -26,17 +26,17 @@ $lang = array(
 	'markassold_invalid_topic'		=> "The topic could not be found.",
 
 	// Admin settings page
-	'markassold_settings_title'				=> "Mark As Sold Settings",
-	'markassold_forums_setting'				=> "Enabled Forums",
-	'markassold_forums_setting_desc'		=> "Select which forums show the Mark as Sold button. Leave empty to disable.",
-	'markassold_tag_setting'				=> "Tag Name",
-	'markassold_tag_setting_desc'			=> "The tag to apply when a topic is marked as sold. Must match an existing tag created in AdminCP > Community > Tags. Supports any language (e.g. \"Såld\" for Swedish).",
-	'markassold_autolock_setting'			=> "Auto-lock Topic",
-	'markassold_autolock_setting_desc'		=> "Automatically lock the topic when marked as sold, and unlock when unmarked.",
-	'markassold_bg_color_setting'			=> "Tag Background Color",
-	'markassold_bg_color_setting_desc'		=> "Background color for the Sold tag badge.",
-	'markassold_text_color_setting'			=> "Tag Text Color",
-	'markassold_text_color_setting_desc'	=> "Text color for the Sold tag badge.",
+	'markassold_settings_title'		=> "Mark As Sold Settings",
+	'markassold_forums'				=> "Enabled Forums",
+	'markassold_forums_desc'		=> "Select which forums show the Mark as Sold button. Leave empty to disable.",
+	'markassold_tag'				=> "Tag Name",
+	'markassold_tag_desc'			=> "The tag to apply when a topic is marked as sold. Must match an existing tag created in AdminCP > Community > Tags. Supports any language (e.g. \"Såld\" for Swedish).",
+	'markassold_autolock'			=> "Auto-lock Topic",
+	'markassold_autolock_desc'		=> "Automatically lock the topic when marked as sold, and unlock when unmarked.",
+	'markassold_bg_color'			=> "Tag Background Color",
+	'markassold_bg_color_desc'		=> "Background color for the Sold tag badge.",
+	'markassold_text_color'			=> "Tag Text Color",
+	'markassold_text_color_desc'	=> "Text color for the Sold tag badge.",
 
 	// AdminCP menu
 	'menu__markassold_settings'				=> "Settings",
@@ -54,10 +54,10 @@ $lang = array(
 	 * markassold_no_permission     => "Du har inte behörighet att utföra denna åtgärd."
 	 * markassold_invalid_topic     => "Ämnet kunde inte hittas."
 	 * markassold_settings_title    => "Inställningar för Markera som Såld"
-	 * markassold_forums_setting    => "Aktiverade forum"
-	 * markassold_tag_setting       => "Taggnamn"
-	 * markassold_autolock_setting  => "Lås ämne automatiskt"
-	 * markassold_bg_color_setting  => "Bakgrundsfärg för tagg"
-	 * markassold_text_color_setting => "Textfärg för tagg"
+	 * markassold_forums            => "Aktiverade forum"
+	 * markassold_tag               => "Taggnamn"
+	 * markassold_autolock          => "Lås ämne automatiskt"
+	 * markassold_bg_color          => "Bakgrundsfärg för tagg"
+	 * markassold_text_color        => "Textfärg för tagg"
 	 */
 );

@@ -16,7 +16,6 @@ class _MarkAsSold
 	 * Modify the content item menu
 	 *
 	 * @param	\IPS\Content\Item	$item	The content item
-	 * @param	array				$items	Existing menu items (passed by reference or returned)
 	 * @return	array				Menu items to add
 	 */
 	public function items( \IPS\Content\Item $item ): array
@@ -29,30 +28,9 @@ class _MarkAsSold
 			return $menuItems;
 		}
 
-		/* Check if this forum is enabled */
-		$enabledForums = Settings::i()->markassold_forums;
-		if ( empty( $enabledForums ) )
-		{
-			return $menuItems;
-		}
-
-		$enabledForumIds = explode( ',', $enabledForums );
-		if ( !\in_array( $item->forum_id, $enabledForumIds ) )
-		{
-			return $menuItems;
-		}
-
-		/* Check permissions: topic author or moderator */
+		/* Use shared permission check */
 		$member = Member::loggedIn();
-		if ( !$member->member_id )
-		{
-			return $menuItems;
-		}
-
-		$isAuthor    = ( (int) $item->starter_id === (int) $member->member_id );
-		$isModerator = $member->modPermission( 'can_close_open' ) || $member->isAdmin();
-
-		if ( !$isAuthor && !$isModerator )
+		if ( !\IPS\markassold\Application::canToggleSold( $item, $member ) )
 		{
 			return $menuItems;
 		}

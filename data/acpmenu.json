@@ -1,0 +1,10 @@
+[
+	{
+		"app": "markassold",
+		"module_key": "settings",
+		"controller": "settings",
+		"do": "",
+		"tab": "markassold",
+		"restriction": "markassold_settings_manage"
+	}
+]
