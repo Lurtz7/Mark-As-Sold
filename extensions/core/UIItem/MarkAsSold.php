@@ -151,12 +151,19 @@ class MarkAsSold extends Item
 				'front'
 			)->csrf();
 
-			$labelKey = $hasTag ? 'markassold_unmark' : 'markassold_mark';
-			$label    = sprintf( Member::loggedIn()->language()->addToStack( $labelKey ), $tagName );
+			/*
+			 * Create unique language keys per tag for the button labels.
+			 * We register them dynamically so IPS's {lang} template tag can find them.
+			 */
+			$markKey   = 'markassold_mark_' . md5( $tagName );
+			$unmarkKey = 'markassold_unmark_' . md5( $tagName );
+
+			Member::loggedIn()->language()->words[ $markKey ]   = Member::loggedIn()->language()->addToStack( 'markassold_mark', FALSE, array( 'sprintf' => array( $tagName ) ) );
+			Member::loggedIn()->language()->words[ $unmarkKey ] = Member::loggedIn()->language()->addToStack( 'markassold_unmark', FALSE, array( 'sprintf' => array( $tagName ) ) );
 
 			$link = new Menu\Link(
 				url: $url,
-				languageString: $label,
+				languageString: $hasTag ? $unmarkKey : $markKey,
 				icon: $hasTag ? 'fa-solid fa-times' : 'fa-solid fa-tag'
 			);
 			$link->requiresConfirm();
