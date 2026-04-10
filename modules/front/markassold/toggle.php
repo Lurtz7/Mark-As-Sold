@@ -33,7 +33,7 @@ class toggle extends Controller
 	}
 
 	/**
-	 * Toggle the sold tag on a topic
+	 * Toggle a tag on a topic
 	 *
 	 * @return void
 	 */
@@ -58,7 +58,7 @@ class toggle extends Controller
 			return;
 		}
 
-		/* Use shared permission check */
+		/* Check permissions */
 		$member = Member::loggedIn();
 		if ( !\IPS\markassold\Application::canToggleSold( $topic, $member ) )
 		{
@@ -70,20 +70,53 @@ class toggle extends Controller
 			return;
 		}
 
+		/* Which tag are we toggling? */
+		$tagName = Request::i()->tag ?? '';
+		if ( empty( $tagName ) )
+		{
+			Output::i()->error(
+				Member::loggedIn()->language()->addToStack( 'markassold_no_permission' ),
+				'2MAS01/3',
+				400
+			);
+			return;
+		}
+
+		/* Find the matching config for this tag + forum */
+		$configs  = \IPS\markassold\Application::getTagConfigsForForum( (int) $topic->forum_id );
+		$config   = NULL;
+		foreach ( $configs as $c )
+		{
+			if ( mb_strtolower( $c['tag'] ) === mb_strtolower( $tagName ) )
+			{
+				$config = $c;
+				break;
+			}
+		}
+
+		if ( !$config )
+		{
+			Output::i()->error(
+				Member::loggedIn()->language()->addToStack( 'markassold_no_permission' ),
+				'2MAS01/4',
+				403
+			);
+			return;
+		}
+
 		/* Determine current state and toggle */
-		$tagName     = \IPS\Settings::i()->markassold_tag ?: 'Sold';
 		$currentTags = $topic->tags();
 		$prefix      = $topic->prefix();
-		$isSold      = \IPS\markassold\extensions\core\UIItem\MarkAsSold::isSold( $topic );
+		$hasTag      = \IPS\markassold\extensions\core\UIItem\MarkAsSold::hasTag( $topic, $config['tag'] );
 
-		if ( $isSold )
+		if ( $hasTag )
 		{
-			/* Remove the sold tag (case-insensitive), keep everything else */
-			$newTags = array_values( array_filter( $currentTags, function( $tag ) use ( $tagName ) {
-				return mb_strtolower( $tag ) !== mb_strtolower( $tagName );
+			/* Remove the tag (case-insensitive) */
+			$tagToRemove = $config['tag'];
+			$newTags = array_values( array_filter( $currentTags, function( $tag ) use ( $tagToRemove ) {
+				return mb_strtolower( $tag ) !== mb_strtolower( $tagToRemove );
 			} ) );
 
-			/* Re-add prefix if there was one */
 			if ( $prefix )
 			{
 				$newTags = array_merge( array( 'prefix' => $prefix ), $newTags );
@@ -91,8 +124,8 @@ class toggle extends Controller
 
 			$topic->setTags( $newTags );
 
-			/* Unlock if auto-lock is enabled */
-			if ( \IPS\Settings::i()->markassold_autolock )
+			/* Unlock if auto-lock is enabled for this tag */
+			if ( $config['autolock'] )
 			{
 				$topic->state = 'open';
 				$topic->save();
@@ -102,10 +135,9 @@ class toggle extends Controller
 		}
 		else
 		{
-			/* Add the sold tag to existing tags */
-			$currentTags[] = $tagName;
+			/* Add the tag */
+			$currentTags[] = $config['tag'];
 
-			/* Re-add prefix if there was one */
 			if ( $prefix )
 			{
 				$currentTags = array_merge( array( 'prefix' => $prefix ), $currentTags );
@@ -113,8 +145,8 @@ class toggle extends Controller
 
 			$topic->setTags( $currentTags );
 
-			/* Lock if auto-lock is enabled */
-			if ( \IPS\Settings::i()->markassold_autolock )
+			/* Lock if auto-lock is enabled for this tag */
+			if ( $config['autolock'] )
 			{
 				$topic->state = 'closed';
 				$topic->save();

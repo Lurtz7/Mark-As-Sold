@@ -18,5 +18,25 @@
 	{
 		"key": "markassold_text_color",
 		"default": "#ffffff"
+	},
+	{
+		"key": "markassold_forums2",
+		"default": ""
+	},
+	{
+		"key": "markassold_tag2",
+		"default": ""
+	},
+	{
+		"key": "markassold_autolock2",
+		"default": "1"
+	},
+	{
+		"key": "markassold_bg_color2",
+		"default": "#27ae60"
+	},
+	{
+		"key": "markassold_text_color2",
+		"default": "#ffffff"
 	}
 ]

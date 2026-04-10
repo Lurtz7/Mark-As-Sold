@@ -24,50 +24,74 @@ class Application extends SystemApplication
 	/**
 	 * Output CSS files
 	 *
-	 * Called by IPS when this application's CSS should be loaded.
-	 * Injects dynamic CSS for the sold tag styling based on admin settings.
-	 *
 	 * @return void
 	 */
 	public static function outputCss(): void
 	{
 		parent::outputCss();
-
-		$bgColor   = \IPS\Settings::i()->markassold_bg_color ?: '#e74c3c';
-		$textColor = \IPS\Settings::i()->markassold_text_color ?: '#ffffff';
-		$tagName   = \IPS\Settings::i()->markassold_tag ?: 'Sold';
-
-		/* Sanitize color values — must be valid hex colors */
-		if ( !preg_match( '/^#[0-9a-fA-F]{3,8}$/', $bgColor ) )
-		{
-			$bgColor = '#e74c3c';
-		}
-		if ( !preg_match( '/^#[0-9a-fA-F]{3,8}$/', $textColor ) )
-		{
-			$textColor = '#ffffff';
-		}
-
-		/* Sanitize tag name for safe CSS selector injection */
-		$tagName = htmlspecialchars( $tagName, ENT_QUOTES, 'UTF-8' );
-
-		$css = "<style>
-.ipsTags__tag[data-tag-label=\"{$tagName}\"] {
-	background-color: {$bgColor} !important;
-	color: {$textColor} !important;
-	font-weight: 700;
-	border: none !important;
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
-	border-radius: 3px;
-	padding: 2px 8px;
-}
-</style>";
-
-		\IPS\Output::i()->headCss .= $css;
 	}
 
 	/**
-	 * Check if a member can toggle the sold status on a topic
+	 * Get all configured tag slots (1 and 2)
+	 * Returns array of arrays with keys: tag, forums, autolock, bg_color, text_color
+	 *
+	 * @return array
+	 */
+	public static function getTagConfigs(): array
+	{
+		$configs = array();
+
+		/* Tag 1 */
+		$tag1 = \IPS\Settings::i()->markassold_tag ?? '';
+		if ( !empty( $tag1 ) && !empty( \IPS\Settings::i()->markassold_forums ) )
+		{
+			$configs[] = array(
+				'tag'        => $tag1,
+				'forums'     => \IPS\Settings::i()->markassold_forums,
+				'autolock'   => \IPS\Settings::i()->markassold_autolock,
+				'bg_color'   => \IPS\Settings::i()->markassold_bg_color ?: '#e74c3c',
+				'text_color' => \IPS\Settings::i()->markassold_text_color ?: '#ffffff',
+			);
+		}
+
+		/* Tag 2 */
+		$tag2 = \IPS\Settings::i()->markassold_tag2 ?? '';
+		if ( !empty( $tag2 ) && !empty( \IPS\Settings::i()->markassold_forums2 ) )
+		{
+			$configs[] = array(
+				'tag'        => $tag2,
+				'forums'     => \IPS\Settings::i()->markassold_forums2,
+				'autolock'   => \IPS\Settings::i()->markassold_autolock2,
+				'bg_color'   => \IPS\Settings::i()->markassold_bg_color2 ?: '#27ae60',
+				'text_color' => \IPS\Settings::i()->markassold_text_color2 ?: '#ffffff',
+			);
+		}
+
+		return $configs;
+	}
+
+	/**
+	 * Get tag configs available for a specific forum
+	 *
+	 * @param	int	$forumId
+	 * @return	array
+	 */
+	public static function getTagConfigsForForum( int $forumId ): array
+	{
+		$result = array();
+		foreach ( static::getTagConfigs() as $config )
+		{
+			$forumIds = array_map( 'intval', explode( ',', $config['forums'] ) );
+			if ( \in_array( $forumId, $forumIds, TRUE ) )
+			{
+				$result[] = $config;
+			}
+		}
+		return $result;
+	}
+
+	/**
+	 * Check if a member can toggle tags on a topic
 	 *
 	 * @param	\IPS\forums\Topic	$topic	The topic
 	 * @param	\IPS\Member			$member	The member
@@ -81,15 +105,9 @@ class Application extends SystemApplication
 			return FALSE;
 		}
 
-		/* Check if forum is enabled */
-		$enabledForums = \IPS\Settings::i()->markassold_forums;
-		if ( empty( $enabledForums ) )
-		{
-			return FALSE;
-		}
-
-		$enabledForumIds = array_map( 'intval', explode( ',', $enabledForums ) );
-		if ( !\in_array( (int) $topic->forum_id, $enabledForumIds, TRUE ) )
+		/* Check if any tag config is enabled for this forum */
+		$configs = static::getTagConfigsForForum( (int) $topic->forum_id );
+		if ( empty( $configs ) )
 		{
 			return FALSE;
 		}

@@ -33,16 +33,15 @@ class MarkAsSold extends Item
 	protected static bool $cssInjected = FALSE;
 
 	/**
-	 * Check if a topic has the sold tag (case-insensitive)
+	 * Check if a topic has a specific tag (case-insensitive)
 	 *
 	 * @param	BaseItem	$item
+	 * @param	string		$tagName
 	 * @return	bool
 	 */
-	public static function isSold( BaseItem $item ): bool
+	public static function hasTag( BaseItem $item, string $tagName ): bool
 	{
-		$tagName = \IPS\Settings::i()->markassold_tag ?: 'Sold';
 		$currentTags = $item->tags() ?: array();
-
 		foreach ( $currentTags as $tag )
 		{
 			if ( mb_strtolower( $tag ) === mb_strtolower( $tagName ) )
@@ -50,12 +49,11 @@ class MarkAsSold extends Item
 				return TRUE;
 			}
 		}
-
 		return FALSE;
 	}
 
 	/**
-	 * Inject CSS for the sold tag styling
+	 * Inject CSS for all configured tag styles
 	 *
 	 * @return	void
 	 */
@@ -66,26 +64,29 @@ class MarkAsSold extends Item
 			return;
 		}
 
-		$bgColor   = \IPS\Settings::i()->markassold_bg_color ?: '#e74c3c';
-		$textColor = \IPS\Settings::i()->markassold_text_color ?: '#ffffff';
-		$tagName   = \IPS\Settings::i()->markassold_tag ?: 'Sold';
-
-		/* Sanitize color values */
-		if ( !preg_match( '/^#[0-9a-fA-F]{3,8}$/', $bgColor ) )
+		$css = '';
+		foreach ( \IPS\markassold\Application::getTagConfigs() as $config )
 		{
-			$bgColor = '#e74c3c';
-		}
-		if ( !preg_match( '/^#[0-9a-fA-F]{3,8}$/', $textColor ) )
-		{
-			$textColor = '#ffffff';
-		}
+			$bgColor   = $config['bg_color'];
+			$textColor = $config['text_color'];
+			$tagName   = $config['tag'];
 
-		$tagNameSafe = htmlspecialchars( $tagName, ENT_QUOTES, 'UTF-8' );
-		$tagNameLower = htmlspecialchars( mb_strtolower( $tagName ), ENT_QUOTES, 'UTF-8' );
+			/* Sanitize colors */
+			if ( !preg_match( '/^#[0-9a-fA-F]{3,8}$/', $bgColor ) )
+			{
+				$bgColor = '#e74c3c';
+			}
+			if ( !preg_match( '/^#[0-9a-fA-F]{3,8}$/', $textColor ) )
+			{
+				$textColor = '#ffffff';
+			}
 
-		Output::i()->headCss .= "
-.ipsTags__tag[data-tag-label=\"{$tagNameSafe}\"],
-.ipsTags__tag[data-tag-label=\"{$tagNameLower}\"] {
+			$tagSafe  = htmlspecialchars( $tagName, ENT_QUOTES, 'UTF-8' );
+			$tagLower = htmlspecialchars( mb_strtolower( $tagName ), ENT_QUOTES, 'UTF-8' );
+
+			$css .= "
+.ipsTags__tag[data-tag-label=\"{$tagSafe}\"],
+.ipsTags__tag[data-tag-label=\"{$tagLower}\"] {
 	background-color: {$bgColor} !important;
 	color: {$textColor} !important;
 	font-weight: 700;
@@ -96,6 +97,12 @@ class MarkAsSold extends Item
 	padding: 2px 8px;
 }
 ";
+		}
+
+		if ( $css )
+		{
+			Output::i()->headCss .= $css;
+		}
 
 		static::$cssInjected = TRUE;
 	}
@@ -108,7 +115,6 @@ class MarkAsSold extends Item
 	 */
 	public function css( BaseItem $item ): string
 	{
-		/* Inject CSS on any page that renders topic items */
 		static::injectCss();
 		return '';
 	}
@@ -123,32 +129,39 @@ class MarkAsSold extends Item
 	{
 		$newLinks = [];
 
-		/* Inject CSS whenever menu items are rendered */
 		static::injectCss();
 
-		/* Use shared permission check */
+		/* Check permissions */
 		$member = Member::loggedIn();
 		if ( !\IPS\markassold\Application::canToggleSold( $item, $member ) )
 		{
 			return $newLinks;
 		}
 
-		/* Determine current sold state */
-		$isSold = static::isSold( $item );
+		/* Get tag configs for this forum */
+		$configs = \IPS\markassold\Application::getTagConfigsForForum( (int) $item->forum_id );
 
-		/* Build the toggle URL with CSRF token */
-		$url = Url::internal(
-			"app=markassold&module=markassold&controller=toggle&id={$item->tid}",
-			'front'
-		)->csrf();
+		foreach ( $configs as $index => $config )
+		{
+			$tagName = $config['tag'];
+			$hasTag  = static::hasTag( $item, $tagName );
 
-		$link = new Menu\Link(
-			url: $url,
-			languageString: $isSold ? 'markassold_unmark' : 'markassold_mark',
-			icon: $isSold ? 'fa-solid fa-times' : 'fa-solid fa-tag'
-		);
-		$link->requiresConfirm();
-		$newLinks['markassold'] = $link;
+			$url = Url::internal(
+				"app=markassold&module=markassold&controller=toggle&id={$item->tid}&tag=" . urlencode( $tagName ),
+				'front'
+			)->csrf();
+
+			$labelKey = $hasTag ? 'markassold_unmark' : 'markassold_mark';
+			$label    = sprintf( Member::loggedIn()->language()->addToStack( $labelKey ), $tagName );
+
+			$link = new Menu\Link(
+				url: $url,
+				languageString: $label,
+				icon: $hasTag ? 'fa-solid fa-times' : 'fa-solid fa-tag'
+			);
+			$link->requiresConfirm();
+			$newLinks[ 'markassold_' . $index ] = $link;
+		}
 
 		return $newLinks;
 	}

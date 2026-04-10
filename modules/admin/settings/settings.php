@@ -47,7 +47,9 @@ class settings extends Controller
 	{
 		$form = new Form;
 
-		/* Forum selector — multi-select of forum nodes */
+		/* === Tag 1 === */
+		$form->addHeader( 'markassold_settings_title' );
+
 		$form->add( new Form\Node(
 			'markassold_forums',
 			\IPS\Settings::i()->markassold_forums ? explode( ',', \IPS\Settings::i()->markassold_forums ) : array(),
@@ -59,45 +61,82 @@ class settings extends Controller
 			)
 		) );
 
-		/* Tag name */
 		$form->add( new Form\Text(
 			'markassold_tag',
 			\IPS\Settings::i()->markassold_tag ?: 'Sold',
-			TRUE
+			FALSE
 		) );
 
-		/* Auto-lock toggle */
 		$form->add( new Form\YesNo(
 			'markassold_autolock',
 			\IPS\Settings::i()->markassold_autolock,
 			FALSE
 		) );
 
-		/* Tag background color */
 		$form->add( new Form\Color(
 			'markassold_bg_color',
 			\IPS\Settings::i()->markassold_bg_color ?: '#e74c3c',
 			FALSE
 		) );
 
-		/* Tag text color */
 		$form->add( new Form\Color(
 			'markassold_text_color',
 			\IPS\Settings::i()->markassold_text_color ?: '#ffffff',
 			FALSE
 		) );
 
+		/* === Tag 2 === */
+		$form->addHeader( 'markassold_tag2_header' );
+
+		$form->add( new Form\Node(
+			'markassold_forums2',
+			\IPS\Settings::i()->markassold_forums2 ? explode( ',', \IPS\Settings::i()->markassold_forums2 ) : array(),
+			FALSE,
+			array(
+				'class'           => 'IPS\forums\Forum',
+				'multiple'        => TRUE,
+				'permissionCheck' => NULL,
+			)
+		) );
+
+		$form->add( new Form\Text(
+			'markassold_tag2',
+			\IPS\Settings::i()->markassold_tag2 ?: '',
+			FALSE
+		) );
+
+		$form->add( new Form\YesNo(
+			'markassold_autolock2',
+			\IPS\Settings::i()->markassold_autolock2,
+			FALSE
+		) );
+
+		$form->add( new Form\Color(
+			'markassold_bg_color2',
+			\IPS\Settings::i()->markassold_bg_color2 ?: '#27ae60',
+			FALSE
+		) );
+
+		$form->add( new Form\Color(
+			'markassold_text_color2',
+			\IPS\Settings::i()->markassold_text_color2 ?: '#ffffff',
+			FALSE
+		) );
+
 		if ( $values = $form->values() )
 		{
-			/* Convert forum node objects to comma-separated IDs */
-			if ( isset( $values['markassold_forums'] ) && \is_array( $values['markassold_forums'] ) )
+			/* Convert forum node objects to comma-separated IDs for both tags */
+			foreach ( array( 'markassold_forums', 'markassold_forums2' ) as $key )
 			{
-				$forumIds = array();
-				foreach ( $values['markassold_forums'] as $forum )
+				if ( isset( $values[ $key ] ) && \is_array( $values[ $key ] ) )
 				{
-					$forumIds[] = ( $forum instanceof \IPS\Node\Model ) ? $forum->_id : $forum;
+					$forumIds = array();
+					foreach ( $values[ $key ] as $forum )
+					{
+						$forumIds[] = ( $forum instanceof \IPS\Node\Model ) ? $forum->_id : $forum;
+					}
+					$values[ $key ] = implode( ',', $forumIds );
 				}
-				$values['markassold_forums'] = implode( ',', $forumIds );
 			}
 
 			$form->saveAsSettings( $values );
