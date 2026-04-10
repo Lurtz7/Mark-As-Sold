@@ -11,7 +11,6 @@ use IPS\Dispatcher;
 use IPS\Dispatcher\Controller;
 use IPS\Output;
 use IPS\Member;
-use IPS\Settings;
 use IPS\Helpers\Form;
 
 /* To prevent PHP errors (extending class does not exist) revealing path */
@@ -51,7 +50,7 @@ class settings extends Controller
 		/* Forum selector — multi-select of forum nodes */
 		$form->add( new Form\Node(
 			'markassold_forums',
-			Settings::i()->markassold_forums ? explode( ',', Settings::i()->markassold_forums ) : array(),
+			\IPS\Settings::i()->markassold_forums ? explode( ',', \IPS\Settings::i()->markassold_forums ) : array(),
 			FALSE,
 			array(
 				'class'           => 'IPS\forums\Forum',
@@ -63,28 +62,28 @@ class settings extends Controller
 		/* Tag name */
 		$form->add( new Form\Text(
 			'markassold_tag',
-			Settings::i()->markassold_tag ?: 'Sold',
+			\IPS\Settings::i()->markassold_tag ?: 'Sold',
 			TRUE
 		) );
 
 		/* Auto-lock toggle */
 		$form->add( new Form\YesNo(
 			'markassold_autolock',
-			Settings::i()->markassold_autolock,
+			\IPS\Settings::i()->markassold_autolock,
 			FALSE
 		) );
 
 		/* Tag background color */
 		$form->add( new Form\Color(
 			'markassold_bg_color',
-			Settings::i()->markassold_bg_color ?: '#e74c3c',
+			\IPS\Settings::i()->markassold_bg_color ?: '#e74c3c',
 			FALSE
 		) );
 
 		/* Tag text color */
 		$form->add( new Form\Color(
 			'markassold_text_color',
-			Settings::i()->markassold_text_color ?: '#ffffff',
+			\IPS\Settings::i()->markassold_text_color ?: '#ffffff',
 			FALSE
 		) );
 
