@@ -1,0 +1,22 @@
+[
+	{
+		"key": "markassold_forums",
+		"default": ""
+	},
+	{
+		"key": "markassold_tag",
+		"default": "Sold"
+	},
+	{
+		"key": "markassold_autolock",
+		"default": "1"
+	},
+	{
+		"key": "markassold_bg_color",
+		"default": "#e74c3c"
+	},
+	{
+		"key": "markassold_text_color",
+		"default": "#ffffff"
+	}
+]

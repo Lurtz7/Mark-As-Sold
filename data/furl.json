@@ -1,0 +1,9 @@
+{
+	"topLevel": {},
+	"pages": {
+		"markassold_toggle": {
+			"friendly": "markassold/toggle/{id}",
+			"real": "app=markassold&module=markassold&controller=toggle"
+		}
+	}
+}
