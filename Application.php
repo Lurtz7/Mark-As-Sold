@@ -51,17 +51,15 @@ class Application extends SystemApplication
 		$tagName = htmlspecialchars( $tagName, ENT_QUOTES, 'UTF-8' );
 
 		$css = "<style>
-:root {
-	--markassold-bg: {$bgColor};
-	--markassold-text: {$textColor};
-}
-.ipsTag[data-tag=\"{$tagName}\"] {
-	background-color: var(--markassold-bg) !important;
-	color: var(--markassold-text) !important;
+.ipsTags__tag[data-tag-label=\"{$tagName}\"] {
+	background-color: {$bgColor} !important;
+	color: {$textColor} !important;
 	font-weight: 700;
 	border: none !important;
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
+	border-radius: 3px;
+	padding: 2px 8px;
 }
 </style>";
 

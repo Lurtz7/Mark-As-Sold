@@ -12,7 +12,6 @@ use IPS\Dispatcher\Controller;
 use IPS\Output;
 use IPS\Request;
 use IPS\Member;
-use IPS\Settings;
 
 /* To prevent PHP errors (extending class does not exist) revealing path */
 if ( !defined( '\IPS\SUITE_UNIQUE_KEY' ) )
@@ -72,21 +71,28 @@ class toggle extends Controller
 		}
 
 		/* Determine current state and toggle */
-		$tagName     = Settings::i()->markassold_tag ?: 'Sold';
-		$currentTags = $topic->tags() ?: array();
+		$tagName     = \IPS\Settings::i()->markassold_tag ?: 'Sold';
+		$currentTags = $topic->tags();
+		$prefix      = $topic->prefix();
 		$isSold      = \in_array( $tagName, $currentTags );
 
 		if ( $isSold )
 		{
-			/* Remove the sold tag */
+			/* Remove the sold tag, keep everything else */
 			$newTags = array_values( array_filter( $currentTags, function( $tag ) use ( $tagName ) {
 				return $tag !== $tagName;
 			} ) );
 
-			$this->setTopicTags( $topic, $newTags );
+			/* Re-add prefix if there was one */
+			if ( $prefix )
+			{
+				$newTags = array_merge( array( 'prefix' => $prefix ), $newTags );
+			}
+
+			$topic->setTags( $newTags );
 
 			/* Unlock if auto-lock is enabled */
-			if ( Settings::i()->markassold_autolock )
+			if ( \IPS\Settings::i()->markassold_autolock )
 			{
 				$topic->state = 'open';
 				$topic->save();
@@ -96,13 +102,19 @@ class toggle extends Controller
 		}
 		else
 		{
-			/* Add the sold tag */
+			/* Add the sold tag to existing tags */
 			$currentTags[] = $tagName;
 
-			$this->setTopicTags( $topic, $currentTags );
+			/* Re-add prefix if there was one */
+			if ( $prefix )
+			{
+				$currentTags = array_merge( array( 'prefix' => $prefix ), $currentTags );
+			}
+
+			$topic->setTags( $currentTags );
 
 			/* Lock if auto-lock is enabled */
-			if ( Settings::i()->markassold_autolock )
+			if ( \IPS\Settings::i()->markassold_autolock )
 			{
 				$topic->state = 'closed';
 				$topic->save();
@@ -116,93 +128,5 @@ class toggle extends Controller
 			$topic->url(),
 			Member::loggedIn()->language()->addToStack( $flashMessage )
 		);
-	}
-
-	/**
-	 * Set tags on a topic
-	 *
-	 * Uses IPS's built-in tag methods. If $topic->setTags() is not available
-	 * in your IPS5 version, this falls back to direct DB manipulation.
-	 *
-	 * @param	\IPS\forums\Topic	$topic	The topic
-	 * @param	array				$tags	Array of tag strings
-	 * @return	void
-	 */
-	protected function setTopicTags( \IPS\forums\Topic $topic, array $tags ): void
-	{
-		/*
-		 * IPS5 approach: use the built-in setTags method if available.
-		 * The Content\Tags interface provides setTags() on content items.
-		 *
-		 * Verify this works against your IPS5 source code at:
-		 *   system/Content/Tags.php
-		 *   applications/forums/sources/Topic/Topic.php
-		 *
-		 * If setTags() is not available, use the fallback below.
-		 */
-		if ( method_exists( $topic, 'setTags' ) )
-		{
-			$topic->setTags( $tags );
-			return;
-		}
-
-		/*
-		 * Fallback: direct database manipulation.
-		 * Delete existing tags and re-insert.
-		 */
-		$existingPrefix = $topic->prefix();
-
-		\IPS\Db::i()->delete( 'core_tags', array(
-			'tag_meta_app=? AND tag_meta_area=? AND tag_meta_id=?',
-			'forums',
-			'forums',
-			$topic->tid
-		) );
-
-		$member = Member::loggedIn();
-
-		/* Re-insert prefix if it existed */
-		if ( $existingPrefix )
-		{
-			\IPS\Db::i()->insert( 'core_tags', array(
-				'tag_aai_lookup'     => $topic->tagAAIKey(),
-				'tag_aap_lookup'     => $topic->tagAAPKey(),
-				'tag_meta_app'       => 'forums',
-				'tag_meta_area'      => 'forums',
-				'tag_meta_id'        => $topic->tid,
-				'tag_meta_parent_id' => $topic->forum_id,
-				'tag_member_id'      => $member->member_id,
-				'tag_added'          => time(),
-				'tag_prefix'         => 1,
-				'tag_text'           => $existingPrefix,
-			) );
-		}
-
-		foreach ( $tags as $tag )
-		{
-			if ( $tag === $existingPrefix )
-			{
-				continue;
-			}
-
-			\IPS\Db::i()->insert( 'core_tags', array(
-				'tag_aai_lookup'     => $topic->tagAAIKey(),
-				'tag_aap_lookup'     => $topic->tagAAPKey(),
-				'tag_meta_app'       => 'forums',
-				'tag_meta_area'      => 'forums',
-				'tag_meta_id'        => $topic->tid,
-				'tag_meta_parent_id' => $topic->forum_id,
-				'tag_member_id'      => $member->member_id,
-				'tag_added'          => time(),
-				'tag_prefix'         => 0,
-				'tag_text'           => $tag,
-			) );
-		}
-
-		/* Clear tag cache on the topic */
-		if ( method_exists( $topic, 'clearTagCache' ) )
-		{
-			$topic->clearTagCache();
-		}
 	}
 }
