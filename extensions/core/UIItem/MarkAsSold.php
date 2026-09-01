@@ -1,4 +1,9 @@
 <?php
+/**
+ * @package		Mark As Sold
+ * @author		Lurtz7
+ * @copyright	2026
+ */
 
 namespace IPS\markassold\extensions\core\UIItem;
 
@@ -6,6 +11,8 @@ use IPS\Content\Item as BaseItem;
 use IPS\forums\Topic;
 use IPS\Helpers\Menu;
 use IPS\Http\Url;
+use IPS\markassold\Application;
+use IPS\markassold\TagLogic;
 use IPS\Member;
 use IPS\Output;
 use IPS\Output\UI\Item;
@@ -33,27 +40,10 @@ class MarkAsSold extends Item
 	protected static bool $cssInjected = FALSE;
 
 	/**
-	 * Check if a topic has a specific tag (case-insensitive)
+	 * Inject the badge CSS for all configured tags into the page head.
 	 *
-	 * @param	BaseItem	$item
-	 * @param	string		$tagName
-	 * @return	bool
-	 */
-	public static function hasTag( BaseItem $item, string $tagName ): bool
-	{
-		$currentTags = $item->tags() ?: array();
-		foreach ( $currentTags as $tag )
-		{
-			if ( mb_strtolower( $tag ) === mb_strtolower( $tagName ) )
-			{
-				return TRUE;
-			}
-		}
-		return FALSE;
-	}
-
-	/**
-	 * Inject CSS for all configured tag styles
+	 * The rule is global: any tag with the configured name is styled wherever the
+	 * page renders it, but only on pages where this extension runs for a topic.
 	 *
 	 * @return	void
 	 */
@@ -63,30 +53,22 @@ class MarkAsSold extends Item
 		{
 			return;
 		}
+		static::$cssInjected = TRUE;
 
 		$css = '';
-		foreach ( \IPS\markassold\Application::getTagConfigs() as $config )
+		foreach ( Application::getTagConfigs() as $config )
 		{
-			$bgColor   = $config['bg_color'];
-			$textColor = $config['text_color'];
-			$tagName   = $config['tag'];
+			$bgColor   = TagLogic::isHexColor( $config['bg_color'] ) ? $config['bg_color'] : Application::SLOTS[ $config['slot'] ]['bg_color'];
+			$textColor = TagLogic::isHexColor( $config['text_color'] ) ? $config['text_color'] : '#ffffff';
+			$exact     = TagLogic::cssAttributeValue( $config['tag'] );
+			$lower     = TagLogic::cssAttributeValue( mb_strtolower( $config['tag'] ) );
 
-			/* Sanitize colors */
-			if ( !preg_match( '/^#[0-9a-fA-F]{3,8}$/', $bgColor ) )
-			{
-				$bgColor = '#e74c3c';
-			}
-			if ( !preg_match( '/^#[0-9a-fA-F]{3,8}$/', $textColor ) )
-			{
-				$textColor = '#ffffff';
-			}
-
-			$tagSafe  = htmlspecialchars( $tagName, ENT_QUOTES, 'UTF-8' );
-			$tagLower = htmlspecialchars( mb_strtolower( $tagName ), ENT_QUOTES, 'UTF-8' );
-
-			$css .= "
-.ipsTags__tag[data-tag-label=\"{$tagSafe}\"],
-.ipsTags__tag[data-tag-label=\"{$tagLower}\"] {
+			/* Regular tags render as .ipsTags__tag, a prefix renders as .ipsBadge--prefix; both carry data-tag-label */
+			$css .= <<<CSS
+.ipsTags__tag[data-tag-label="{$exact}"],
+.ipsTags__tag[data-tag-label="{$lower}"],
+.ipsBadge--prefix[data-tag-label="{$exact}"],
+.ipsBadge--prefix[data-tag-label="{$lower}"] {
 	background-color: {$bgColor} !important;
 	color: {$textColor} !important;
 	font-weight: 700;
@@ -96,19 +78,18 @@ class MarkAsSold extends Item
 	border-radius: 3px;
 	padding: 2px 8px;
 }
-";
+
+CSS;
 		}
 
-		if ( $css )
+		if ( $css !== '' )
 		{
 			Output::i()->headCss .= $css;
 		}
-
-		static::$cssInjected = TRUE;
 	}
 
 	/**
-	 * Add CSS classes to the topic row
+	 * Add CSS classes to the topic row (used here only to trigger the CSS injection)
 	 *
 	 * @param	BaseItem	$item
 	 * @return	string
@@ -127,24 +108,26 @@ class MarkAsSold extends Item
 	 */
 	public function menuItems( BaseItem $item ): array
 	{
-		$newLinks = [];
-
 		static::injectCss();
 
-		/* Check permissions */
-		$member = Member::loggedIn();
-		if ( !\IPS\markassold\Application::canToggleSold( $item, $member ) )
+		if ( !( $item instanceof Topic ) )
 		{
-			return $newLinks;
+			return array();
 		}
 
-		/* Get tag configs for this forum */
-		$configs = \IPS\markassold\Application::getTagConfigsForForum( (int) $item->forum_id );
+		$member = Member::loggedIn();
+		if ( !Application::canToggleSold( $item, $member ) )
+		{
+			return array();
+		}
 
-		foreach ( $configs as $index => $config )
+		$newLinks = array();
+		$language = $member->language();
+
+		foreach ( Application::getTagConfigsForForum( (int) $item->forum_id ) as $config )
 		{
 			$tagName = $config['tag'];
-			$hasTag  = static::hasTag( $item, $tagName );
+			$hasTag  = Application::topicHasTag( $item, $tagName );
 
 			$url = Url::internal(
 				"app=markassold&module=markassold&controller=toggle&id={$item->tid}&tag=" . urlencode( $tagName ),
@@ -152,22 +135,32 @@ class MarkAsSold extends Item
 			)->csrf();
 
 			/*
-			 * Create unique language keys per tag for the button labels.
-			 * We register them dynamically so IPS's {lang} template tag can find them.
+			 * Per-tag language keys so the menu template's {lang} tag resolves to "Mark as <tag>".
+			 * Same idiom as core (e.g. \IPS\Content\Item), the placeholder chain is resolved on output.
 			 */
 			$markKey   = 'markassold_mark_' . md5( $tagName );
 			$unmarkKey = 'markassold_unmark_' . md5( $tagName );
-
-			Member::loggedIn()->language()->words[ $markKey ]   = Member::loggedIn()->language()->addToStack( 'markassold_mark', FALSE, array( 'sprintf' => array( $tagName ) ) );
-			Member::loggedIn()->language()->words[ $unmarkKey ] = Member::loggedIn()->language()->addToStack( 'markassold_unmark', FALSE, array( 'sprintf' => array( $tagName ) ) );
+			$language->words[ $markKey ]   = $language->addToStack( 'markassold_mark', FALSE, array( 'sprintf' => array( $tagName ) ) );
+			$language->words[ $unmarkKey ] = $language->addToStack( 'markassold_unmark', FALSE, array( 'sprintf' => array( $tagName ) ) );
 
 			$link = new Menu\Link(
 				url: $url,
 				languageString: $hasTag ? $unmarkKey : $markKey,
 				icon: $hasTag ? 'fa-solid fa-times' : 'fa-solid fa-tag'
 			);
+
+			/*
+			 * Confirmation dialog, mentioning the lock side effect when the slot auto-locks.
+			 * Link::requiresConfirm( $desc ) writes the sub-message as "data_confirmSubmessage" (underscore),
+			 * which the front-end JS never reads, so set the real data attribute ourselves.
+			 */
 			$link->requiresConfirm();
-			$newLinks[ 'markassold_' . $index ] = $link;
+			if ( $config['autolock'] )
+			{
+				$link->addAttribute( 'data-confirmSubMessage', $language->addToStack( $hasTag ? 'markassold_confirm_unlock' : 'markassold_confirm_lock' ) );
+			}
+
+			$newLinks[ 'markassold_' . $config['slot'] ] = $link;
 		}
 
 		return $newLinks;

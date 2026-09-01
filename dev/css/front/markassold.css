@@ -1,15 +1,15 @@
 /**
- * Mark As Sold — Tag Styling (fallback defaults)
+ * Mark As Sold — static defaults
  *
- * CSS custom properties are set dynamically by Application::outputCss()
- * based on admin settings. This file provides fallback defaults only.
- *
- * The dynamic CSS in Application.php targets the actual configured tag
- * name via .ipsTag[data-tag="..."] selector. This static file provides
- * the variable defaults in case the dynamic injection hasn't fired.
+ * The badge colours are injected into the page head at runtime by
+ * extensions/core/UIItem/MarkAsSold.php, based on the AdminCP settings.
+ * This file only exposes the default colours as CSS custom properties so
+ * that a theme can reference them; nothing in the application reads them.
  */
 
 :root {
 	--markassold-bg: #e74c3c;
 	--markassold-text: #ffffff;
+	--markassold-bg2: #27ae60;
+	--markassold-text2: #ffffff;
 }

@@ -5,7 +5,7 @@
 	},
 	{
 		"key": "markassold_tag",
-		"default": "Sold"
+		"default": ""
 	},
 	{
 		"key": "markassold_autolock",

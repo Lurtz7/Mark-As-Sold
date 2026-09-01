@@ -7,11 +7,22 @@
 
 namespace IPS\markassold\modules\admin\settings;
 
+use DomainException;
+use IPS\Db;
 use IPS\Dispatcher;
 use IPS\Dispatcher\Controller;
-use IPS\Output;
-use IPS\Member;
 use IPS\Helpers\Form;
+use IPS\Http\Url;
+use IPS\markassold\Application;
+use IPS\markassold\TagLogic;
+use IPS\Member;
+use IPS\Node\Model;
+use IPS\Output;
+use IPS\Request;
+use IPS\Session;
+
+/* Note: no "use IPS\Settings" here. PHP class names are case-insensitive, so that alias
+   would collide with this controller class, which IPS requires to be named "settings". */
 
 /* To prevent PHP errors (extending class does not exist) revealing path */
 if ( !defined( '\IPS\SUITE_UNIQUE_KEY' ) )
@@ -23,9 +34,9 @@ if ( !defined( '\IPS\SUITE_UNIQUE_KEY' ) )
 class settings extends Controller
 {
 	/**
-	 * @var bool CSRF protection
+	 * @var bool	Controller handles CSRF itself (the Form helper validates csrfKey on submit)
 	 */
-	public static $csrfProtected = TRUE;
+	public static bool $csrfProtected = TRUE;
 
 	/**
 	 * Execute
@@ -47,104 +58,107 @@ class settings extends Controller
 	{
 		$form = new Form;
 
-		/* === Tag 1 === */
-		$form->addHeader( 'markassold_settings_title' );
+		/* A configured tag must exist (and be enabled) in AdminCP > Community > Tags */
+		$tagExists = function( $val )
+		{
+			$val = trim( (string) $val );
+			if ( $val !== '' and Application::resolveTag( $val ) === NULL )
+			{
+				throw new DomainException( 'markassold_tag_not_found' );
+			}
+		};
 
-		$form->add( new Form\Node(
-			'markassold_forums',
-			\IPS\Settings::i()->markassold_forums ? explode( ',', \IPS\Settings::i()->markassold_forums ) : array(),
-			FALSE,
-			array(
-				'class'           => 'IPS\forums\Forum',
-				'multiple'        => TRUE,
-				'permissionCheck' => NULL,
-			)
-		) );
+		/* Tag 2 must differ from tag 1, otherwise the slots collide on the same tag */
+		$tag2Valid = function( $val ) use ( $tagExists )
+		{
+			$tagExists( $val );
+			$val = trim( (string) $val );
+			if ( $val !== '' and TagLogic::normalise( $val ) === TagLogic::normalise( (string) Request::i()->markassold_tag ) )
+			{
+				throw new DomainException( 'markassold_tag_duplicate' );
+			}
+		};
 
-		$form->add( new Form\Text(
-			'markassold_tag',
-			\IPS\Settings::i()->markassold_tag ?: 'Sold',
-			FALSE
-		) );
+		foreach ( Application::SLOTS as $slot => $meta )
+		{
+			$s = $meta['suffix'];
 
-		$form->add( new Form\YesNo(
-			'markassold_autolock',
-			\IPS\Settings::i()->markassold_autolock,
-			FALSE
-		) );
+			$form->addHeader( $slot === 1 ? 'markassold_settings_title' : 'markassold_tag2_header' );
 
-		$form->add( new Form\Color(
-			'markassold_bg_color',
-			\IPS\Settings::i()->markassold_bg_color ?: '#e74c3c',
-			FALSE
-		) );
+			$form->add( new Form\Node(
+				"markassold_forums{$s}",
+				\IPS\Settings::i()->{"markassold_forums{$s}"} ? explode( ',', \IPS\Settings::i()->{"markassold_forums{$s}"} ) : array(),
+				FALSE,
+				array(
+					'class'           => 'IPS\forums\Forum',
+					'multiple'        => TRUE,
+					'permissionCheck' => NULL,
+				)
+			) );
 
-		$form->add( new Form\Color(
-			'markassold_text_color',
-			\IPS\Settings::i()->markassold_text_color ?: '#ffffff',
-			FALSE
-		) );
+			/* Empty tag name = slot disabled (data/settings.json defaults to "" so IPS does not substitute a default) */
+			$form->add( new Form\Text(
+				"markassold_tag{$s}",
+				(string) ( \IPS\Settings::i()->{"markassold_tag{$s}"} ?? '' ),
+				FALSE,
+				array(),
+				$slot === 1 ? $tagExists : $tag2Valid
+			) );
 
-		/* === Tag 2 === */
-		$form->addHeader( 'markassold_tag2_header' );
+			$form->add( new Form\YesNo(
+				"markassold_autolock{$s}",
+				\IPS\Settings::i()->{"markassold_autolock{$s}"},
+				FALSE
+			) );
 
-		$form->add( new Form\Node(
-			'markassold_forums2',
-			\IPS\Settings::i()->markassold_forums2 ? explode( ',', \IPS\Settings::i()->markassold_forums2 ) : array(),
-			FALSE,
-			array(
-				'class'           => 'IPS\forums\Forum',
-				'multiple'        => TRUE,
-				'permissionCheck' => NULL,
-			)
-		) );
+			$form->add( new Form\Color(
+				"markassold_bg_color{$s}",
+				\IPS\Settings::i()->{"markassold_bg_color{$s}"} ?: $meta['bg_color'],
+				FALSE
+			) );
 
-		$form->add( new Form\Text(
-			'markassold_tag2',
-			\IPS\Settings::i()->markassold_tag2 ?: '',
-			FALSE
-		) );
-
-		$form->add( new Form\YesNo(
-			'markassold_autolock2',
-			\IPS\Settings::i()->markassold_autolock2,
-			FALSE
-		) );
-
-		$form->add( new Form\Color(
-			'markassold_bg_color2',
-			\IPS\Settings::i()->markassold_bg_color2 ?: '#27ae60',
-			FALSE
-		) );
-
-		$form->add( new Form\Color(
-			'markassold_text_color2',
-			\IPS\Settings::i()->markassold_text_color2 ?: '#ffffff',
-			FALSE
-		) );
+			$form->add( new Form\Color(
+				"markassold_text_color{$s}",
+				\IPS\Settings::i()->{"markassold_text_color{$s}"} ?: '#ffffff',
+				FALSE
+			) );
+		}
 
 		if ( $values = $form->values() )
 		{
-			/* Convert forum node objects to comma-separated IDs for both tags */
-			foreach ( array( 'markassold_forums', 'markassold_forums2' ) as $key )
+			/* Convert forum node objects to comma-separated IDs */
+			foreach ( Application::SLOTS as $meta )
 			{
-				if ( isset( $values[ $key ] ) && \is_array( $values[ $key ] ) )
+				$key = "markassold_forums{$meta['suffix']}";
+				if ( isset( $values[ $key ] ) and is_array( $values[ $key ] ) )
 				{
 					$forumIds = array();
 					foreach ( $values[ $key ] as $forum )
 					{
-						$forumIds[] = ( $forum instanceof \IPS\Node\Model ) ? $forum->_id : $forum;
+						$forumIds[] = ( $forum instanceof Model ) ? $forum->_id : $forum;
 					}
 					$values[ $key ] = implode( ',', $forumIds );
 				}
 			}
 
-			$form->saveAsSettings( $values );
+			/*
+			 * Settings::changeValues() silently ignores keys that have no row in
+			 * core_sys_conf_settings (it only throws under IN_DEV). That happens when the
+			 * app was updated by copying files instead of uploading through the AdminCP,
+			 * so fail loudly instead of showing a false "Saved".
+			 */
+			$existing = iterator_to_array( Db::i()->select( 'conf_key', 'core_sys_conf_settings', array( 'conf_app=?', 'markassold' ) ) );
+			$missing  = array_diff( array_keys( $values ), $existing );
+			if ( count( $missing ) )
+			{
+				Output::i()->error( 'markassold_settings_missing', '3MAS02/1', 500, '' );
+				return;
+			}
 
-			Output::i()->redirect(
-				\IPS\Http\Url::internal( 'app=markassold&module=settings&controller=settings' ),
-				'saved'
-			);
+			$form->saveAsSettings( $values );
+			Session::i()->log( 'acplog__markassold_settings' );
+
+			Output::i()->redirect( Url::internal( 'app=markassold&module=settings&controller=settings' ), 'saved' );
 		}
 
 		Output::i()->title  = Member::loggedIn()->language()->addToStack( 'markassold_settings_title' );
