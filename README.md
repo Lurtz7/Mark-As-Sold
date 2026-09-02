@@ -82,11 +82,20 @@ On a CLI without a `php.ini` (for example Laragon's bundled PHP) enable mbstring
 php -d extension_dir=<php-dir>/ext -d extension=mbstring dev/tests/run.php
 ```
 
-### Deploy checklist
+### Deploying
 
-- Bump `data/versions.json` for every release so the AdminCP shows which build is installed.
-- Build in the Developer Center and upload the `.tar` through the AdminCP.
-- After upgrading, confirm all settings rows exist:
+`dev/tools/deploy.ps1` does the whole release from a Windows machine with a local `IN_DEV` install (Laragon):
+
+```
+pwsh dev/tools/deploy.ps1              # build + deploy over SSH
+pwsh dev/tools/deploy.ps1 -BuildOnly   # only produce the .tar for manual upload via AdminCP
+```
+
+It runs the unit tests, syncs the repository into the local dev install, builds the package the same way Developer Center > Build does (`dev/tools/build.php`), uploads it over SSH, backs up the live app, extracts the package, removes folders left over from older builds, fixes ownership and then runs the AdminCP upgrade routine on the server (`dev/tools/remote-upgrade.php`, executed as the web server user). That last step is what a plain file copy misses: it creates new settings rows, installs new language strings and templates, records the version and clears caches.
+
+Requirements: MySQL running locally (the build uses the dev database), `ssh`/`scp` on this machine, a `php` CLI on the server, and sudo rights there. Server, paths and PHP location are parameters with defaults at the top of the script. Bump `data/versions.json` for every release so the AdminCP shows which build is installed. The script refuses to deploy an uncommitted working tree unless `-AllowDirty` is given.
+
+If you deploy manually instead, upload the `.tar` through **AdminCP > System > Site Features > Applications > Upload**, never by FTP, and confirm afterwards that all settings rows exist:
 
 ```sql
 SELECT conf_key, conf_value FROM core_sys_conf_settings WHERE conf_app = 'markassold';
