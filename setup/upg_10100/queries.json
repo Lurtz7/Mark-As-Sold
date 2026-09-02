@@ -1,0 +1,60 @@
+{
+    "1": {
+        "method": "createTable",
+        "params": [
+            {
+                "name": "markassold_locks",
+                "columns": {
+                    "lock_topic_id": {
+                        "name": "lock_topic_id",
+                        "type": "BIGINT",
+                        "length": 20,
+                        "decimals": null,
+                        "values": null,
+                        "allow_null": false,
+                        "default": 0,
+                        "comment": "Topic locked by Mark As Sold (forums_topics.tid)",
+                        "unsigned": true,
+                        "auto_increment": false
+                    },
+                    "lock_member_id": {
+                        "name": "lock_member_id",
+                        "type": "INT",
+                        "length": 10,
+                        "decimals": null,
+                        "values": null,
+                        "allow_null": false,
+                        "default": 0,
+                        "comment": "Member who applied the tag",
+                        "unsigned": true,
+                        "auto_increment": false
+                    },
+                    "lock_time": {
+                        "name": "lock_time",
+                        "type": "INT",
+                        "length": 10,
+                        "decimals": null,
+                        "values": null,
+                        "allow_null": false,
+                        "default": 0,
+                        "comment": "Unix timestamp of the lock",
+                        "unsigned": true,
+                        "auto_increment": false
+                    }
+                },
+                "indexes": {
+                    "PRIMARY": {
+                        "type": "primary",
+                        "name": "PRIMARY",
+                        "columns": [
+                            "lock_topic_id"
+                        ],
+                        "length": [
+                            null
+                        ]
+                    }
+                }
+            }
+        ]
+    }
+}

@@ -89,10 +89,18 @@ T::test( 'does nothing when already locked (not our lock)', fn() => T::eq( FALSE
 T::test( 'does nothing when autolock is off', fn() => T::eq( FALSE, TagLogic::shouldLockOnMark( FALSE, FALSE ) ) );
 
 echo "shouldUnlockOnUnmark\n";
-T::test( 'unlocks when autolock is on, topic is locked and nothing else holds it', fn() => T::eq( TRUE, TagLogic::shouldUnlockOnUnmark( TRUE, TRUE, FALSE ) ) );
-T::test( 'keeps the lock while another autolock tag remains', fn() => T::eq( FALSE, TagLogic::shouldUnlockOnUnmark( TRUE, TRUE, TRUE ) ) );
-T::test( 'nothing to do when the topic is not locked', fn() => T::eq( FALSE, TagLogic::shouldUnlockOnUnmark( TRUE, FALSE, FALSE ) ) );
-T::test( 'nothing to do when autolock is off', fn() => T::eq( FALSE, TagLogic::shouldUnlockOnUnmark( FALSE, TRUE, FALSE ) ) );
+/* args: autolock, locked, otherAutolockRemains, appLocked (our own record exists), moderatorLockedAfter */
+T::test( 'unlocks our own lock when nothing else holds it', fn() => T::eq( TRUE, TagLogic::shouldUnlockOnUnmark( TRUE, TRUE, FALSE, TRUE, FALSE ) ) );
+T::test( 'never unlocks a lock the app did not apply', fn() => T::eq( FALSE, TagLogic::shouldUnlockOnUnmark( TRUE, TRUE, FALSE, FALSE, FALSE ) ) );
+T::test( 'never unlocks when a moderator locked the topic after our lock', fn() => T::eq( FALSE, TagLogic::shouldUnlockOnUnmark( TRUE, TRUE, FALSE, TRUE, TRUE ) ) );
+T::test( 'keeps the lock while another autolock tag remains', fn() => T::eq( FALSE, TagLogic::shouldUnlockOnUnmark( TRUE, TRUE, TRUE, TRUE, FALSE ) ) );
+T::test( 'nothing to do when the topic is not locked', fn() => T::eq( FALSE, TagLogic::shouldUnlockOnUnmark( TRUE, FALSE, FALSE, TRUE, FALSE ) ) );
+T::test( 'nothing to do when autolock is off', fn() => T::eq( FALSE, TagLogic::shouldUnlockOnUnmark( FALSE, TRUE, FALSE, TRUE, FALSE ) ) );
+
+echo "lockIsReleasable (author may toggle a locked topic only if it is our lock)\n";
+T::test( 'author may toggle when the lock is ours and untouched', fn() => T::eq( TRUE, TagLogic::lockIsReleasable( TRUE, FALSE ) ) );
+T::test( 'author may not toggle a lock that is not ours', fn() => T::eq( FALSE, TagLogic::lockIsReleasable( FALSE, FALSE ) ) );
+T::test( 'author may not toggle after a moderator re-locked', fn() => T::eq( FALSE, TagLogic::lockIsReleasable( TRUE, TRUE ) ) );
 
 echo "flashKey\n";
 T::test( 'marked and locked', fn() => T::eq( 'markassold_marked_msg', TagLogic::flashKey( TRUE, TRUE, TRUE ) ) );

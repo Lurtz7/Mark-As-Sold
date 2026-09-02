@@ -255,18 +255,32 @@ class TagLogic
 	}
 
 	/**
+	 * Is the current lock one the app may release on the author's behalf?
+	 * Only a lock the app itself recorded, and not if a moderator locked the topic since.
+	 *
+	 * @param	bool	$appLocked				The app's own lock record exists for the topic
+	 * @param	bool	$moderatorLockedAfter	A moderator lock action was logged after that record
+	 * @return	bool
+	 */
+	public static function lockIsReleasable( bool $appLocked, bool $moderatorLockedAfter ): bool
+	{
+		return $appLocked && !$moderatorLockedAfter;
+	}
+
+	/**
 	 * Should unmarking unlock the topic? Only when the slot auto-locks, the topic is locked,
-	 * and no other auto-lock tag is still holding it. Whether the member MAY unlock is decided
-	 * by IPS (Lockable::canUnlock) at the call site.
+	 * no other auto-lock tag is still holding it, and the lock is the app's own (see lockIsReleasable).
 	 *
 	 * @param	bool	$autolock				Slot setting
 	 * @param	bool	$locked					Current lock state
 	 * @param	bool	$otherAutolockRemains	See otherAutolockTagRemains()
+	 * @param	bool	$appLocked				The app's own lock record exists
+	 * @param	bool	$moderatorLockedAfter	A moderator locked the topic after that record
 	 * @return	bool
 	 */
-	public static function shouldUnlockOnUnmark( bool $autolock, bool $locked, bool $otherAutolockRemains ): bool
+	public static function shouldUnlockOnUnmark( bool $autolock, bool $locked, bool $otherAutolockRemains, bool $appLocked, bool $moderatorLockedAfter ): bool
 	{
-		return $autolock && $locked && !$otherAutolockRemains;
+		return $autolock && $locked && !$otherAutolockRemains && static::lockIsReleasable( $appLocked, $moderatorLockedAfter );
 	}
 
 	/**

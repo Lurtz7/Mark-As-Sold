@@ -34,16 +34,16 @@ Always update through the AdminCP upload. Copying files over FTP skips the insta
    - Enter the tag name for each slot. It must match an existing enabled tag. Tag 2 must differ from tag 1. Leave a tag name empty to disable that slot.
    - Toggle auto-lock per slot.
    - Choose the badge colours.
-3. **Permissions for auto-lock (important):** locking goes through IPS's own moderation action, so it obeys IPS permissions. Topic authors can only lock and unlock their own topics if their member group has **Can lock and unlock own content?** enabled (AdminCP > Members > Groups > [group] > Content). This is off by default for the Members group, so enable it for the groups that sell. Moderators use their forum moderator permissions. Without the permission the tag is still applied, the topic is not locked, and the member sees "marked, but you do not have permission to lock it".
+3. **Auto-lock needs no member permissions.** When a topic author marks their topic, the application locks it on their behalf and records that it did so (table `markassold_locks`, plus a moderator-log entry). Unmarking releases only that recorded lock. A topic locked by a moderator, or re-locked by a moderator after the sale, stays locked and the member is told so. Members who already hold lock permissions (moderators, or groups with "Can lock and unlock own content?") go through IPS's normal lock action instead, so nothing changes for them.
 
 ## Usage
 
 - In an enabled forum, the topic creator sees a **"Mark as Sold"** option in the topic's action menu.
-- Clicking it adds the configured tag and, if enabled and permitted, locks the topic.
-- Clicking **"Unmark as Sold"** removes the tag and unlocks the topic, unless another auto-lock tag is still applied.
+- Clicking it adds the configured tag and, if auto-lock is enabled, locks the topic.
+- Clicking **"Unmark as Sold"** removes the tag and unlocks the topic, unless another auto-lock tag is still applied or the lock was applied by a moderator.
 - Moderators with lock/unlock permission in the forum can mark or unmark any topic there.
 - The button is not shown for hidden, pending, moved or merged topics, in forums where tagging is disabled, or to members who are restricted from posting or have an unacknowledged warning.
-- On a locked topic the author only sees the button if IPS would let them unlock it themselves. Moderator locks are never undone by authors.
+- On a locked topic the author only sees the button if the lock is the application's own (or IPS would let them unlock it themselves). Moderator locks are never undone by authors.
 
 ## Styling
 
@@ -87,13 +87,16 @@ php -d extension_dir=<php-dir>/ext -d extension=mbstring dev/tests/run.php
 `dev/tools/deploy.ps1` does the whole release from a Windows machine with a local `IN_DEV` install (Laragon):
 
 ```
-pwsh dev/tools/deploy.ps1              # build + deploy over SSH
-pwsh dev/tools/deploy.ps1 -BuildOnly   # only produce the .tar for manual upload via AdminCP
+pwsh dev/tools/deploy.ps1                   # build, rehearse the upgrade locally, deploy over SSH
+pwsh dev/tools/deploy.ps1 -BuildOnly        # only produce the .tar for manual upload via AdminCP
+pwsh dev/tools/deploy.ps1 -NoPhpFpmRestart  # skip the php-fpm restart at the end
 ```
 
-It runs the unit tests, syncs the repository into the local dev install, builds the package the same way Developer Center > Build does (`dev/tools/build.php`), uploads it over SSH, backs up the live app, extracts the package, removes folders left over from older builds, fixes ownership and then runs the AdminCP upgrade routine on the server (`dev/tools/remote-upgrade.php`, executed as the web server user). That last step is what a plain file copy misses: it creates new settings rows, installs new language strings and templates, records the version and clears caches.
+It runs the unit tests, syncs the repository into the local dev install, builds the package the same way Developer Center > Build does (`dev/tools/build.php`) and checks its contents, then rehearses the upgrade routine against the local dev database before touching the server. On the server it backs up the live app, removes files that are no longer in the package, extracts the package, normalises ownership and permissions, runs the AdminCP upgrade routine as the web server user (`dev/tools/remote-upgrade.php`) and restarts php-fpm so opcache serves the new files. The upgrade routine is what a plain file copy misses: it creates new tables (from `setup/upg_<version>/queries.json`), settings rows, language strings and templates, records the version and clears caches.
 
-Requirements: MySQL running locally (the build uses the dev database), `ssh`/`scp` on this machine, a `php` CLI on the server, and sudo rights there. Server, paths and PHP location are parameters with defaults at the top of the script. Bump `data/versions.json` for every release so the AdminCP shows which build is installed. The script refuses to deploy an uncommitted working tree unless `-AllowDirty` is given.
+Requirements: MySQL running locally (the build and the rehearsal use the dev database), `ssh`/`scp` on this machine, a `php` CLI on the server, and sudo rights there. Server, paths and PHP location are parameters with defaults at the top of the script. Bump `data/versions.json` for every release so the AdminCP shows which build is installed, and put any schema change for that version in `setup/upg_<long version>/queries.json`. The script refuses to deploy an uncommitted working tree unless `-AllowDirty` is given, and refuses packages that contain custom upgrade routines (`upgrade.php`); those must go through the AdminCP upgrader.
+
+Rollback: the script prints the backup path (`~/markassold-backup-<stamp>.tgz` on the server). Restore it with `sudo tar -xzf <backup> -C <web root>/applications`, then re-upload the previous package in the AdminCP so its settings and language strings are reinstalled. Tables added by a newer version can stay.
 
 If you deploy manually instead, upload the `.tar` through **AdminCP > System > Site Features > Applications > Upload**, never by FTP, and confirm afterwards that all settings rows exist:
 

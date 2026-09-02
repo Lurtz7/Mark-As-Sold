@@ -11,6 +11,7 @@ use InvalidArgumentException;
 use IPS\Content\Search\Index;
 use IPS\Content\Search\SearchContent;
 use IPS\Dispatcher\Controller;
+use IPS\Events\Event;
 use IPS\forums\Topic;
 use IPS\Log;
 use IPS\markassold\Application;
@@ -110,11 +111,27 @@ class toggle extends Controller
 			}
 			$this->_reindex( $topic );
 
-			/* Unlock only when this slot auto-locks and no other auto-lock tag is still on the topic */
-			$otherRemains = TagLogic::otherAutolockTagRemains( Application::getTagConfigsForForum( (int) $topic->forum_id ), $canonicalTag, $topic->tags(), $topic->prefix() );
-			if ( TagLogic::shouldUnlockOnUnmark( $autolock, $topic->locked(), $otherRemains ) )
+			if ( $topic->locked() )
 			{
-				$lockChanged = $this->_changeLock( $topic, $member, FALSE );
+				/* Release only the app's own lock, and only when no other auto-lock tag still holds the topic */
+				$otherRemains = TagLogic::otherAutolockTagRemains( Application::getTagConfigsForForum( (int) $topic->forum_id ), $canonicalTag, $topic->tags(), $topic->prefix() );
+				$lock         = Application::appLock( $topic );
+				$modAfter     = $lock ? Application::moderatorLockedAfter( $topic, (int) $lock['lock_time'] ) : FALSE;
+
+				if ( TagLogic::shouldUnlockOnUnmark( $autolock, TRUE, $otherRemains, $lock !== NULL, $modAfter ) )
+				{
+					$lockChanged = $this->_unlock( $topic, $member );
+				}
+				elseif ( $autolock and !$otherRemains )
+				{
+					/* Locked by a moderator (or re-locked after our lock): leave it, and say so */
+					$lockChanged = FALSE;
+				}
+			}
+			else
+			{
+				/* Not locked any more (e.g. a moderator unlocked it manually): forget our record */
+				Application::clearAppLock( $topic );
 			}
 
 			$flashMessage = TagLogic::flashKey( FALSE, $autolock, $lockChanged );
@@ -130,9 +147,10 @@ class toggle extends Controller
 			}
 			$this->_reindex( $topic );
 
+			/* Lock only an open topic; an existing lock belongs to whoever applied it and is left alone */
 			if ( TagLogic::shouldLockOnMark( $autolock, $topic->locked() ) )
 			{
-				$lockChanged = $this->_changeLock( $topic, $member, TRUE );
+				$lockChanged = $this->_lock( $topic, $member );
 			}
 
 			$flashMessage = TagLogic::flashKey( TRUE, $autolock, $lockChanged );
@@ -143,35 +161,82 @@ class toggle extends Controller
 	}
 
 	/**
-	 * Lock or unlock through IPS's own moderation path: permission check, moderator log,
-	 * scheduled open/close reset, linked Pages records, events and webhooks.
+	 * Lock the topic on behalf of the member and record that this app did it.
 	 *
-	 * Returns FALSE when the member may not perform the action, e.g. a topic author whose
-	 * group lacks "Can lock and unlock own content?", or a large topic IPS refuses to unlock.
+	 * Members who may lock (moderators, or groups with "Can lock and unlock own content?") go through
+	 * IPS's normal moderation action. Everyone else, i.e. the ordinary topic author, gets the same direct
+	 * write IPS uses when it auto-closes oversized topics (Topic::autoCloseLargeTopic), plus the
+	 * open-timer reset and a moderator-log entry, so the lock is visible and cannot be reopened by a
+	 * scheduled open time.
 	 *
 	 * @param	Topic	$topic
 	 * @param	Member	$member
-	 * @param	bool	$lock	TRUE to lock, FALSE to unlock
-	 * @return	bool	Whether the lock state was changed
+	 * @return	bool	Whether the topic is now locked by this action
 	 */
-	protected function _changeLock( Topic $topic, Member $member, bool $lock ): bool
+	protected function _lock( Topic $topic, Member $member ): bool
 	{
-		$allowed = $lock ? $topic->canLock( $member ) : $topic->canUnlock( $member );
-		if ( !$allowed )
+		if ( $topic->canLock( $member ) )
 		{
-			return FALSE;
+			try
+			{
+				$topic->modAction( 'lock', $member );
+			}
+			catch ( OutOfRangeException | InvalidArgumentException $e )
+			{
+				Log::log( $e, 'markassold' );
+				return FALSE;
+			}
+		}
+		else
+		{
+			$topic->state           = 'closed';
+			$topic->topic_open_time = 0;
+			$topic->save();
+			Event::fire( 'onStatusChange', $topic, array( 'lock' ) );
+			Session::i()->modLog( 'modlog__markassold_lock', array( Topic::$title => TRUE, (string) $topic->url() => FALSE, (string) $topic->mapped( 'title' ) => FALSE ), $topic );
 		}
 
-		try
+		Application::recordAppLock( $topic, $member );
+		return TRUE;
+	}
+
+	/**
+	 * Release a lock this app applied. Callers must have checked TagLogic::shouldUnlockOnUnmark().
+	 *
+	 * @param	Topic	$topic
+	 * @param	Member	$member
+	 * @return	bool	Whether the topic was unlocked
+	 */
+	protected function _unlock( Topic $topic, Member $member ): bool
+	{
+		if ( $topic->canUnlock( $member ) )
 		{
-			$topic->modAction( $lock ? 'lock' : 'unlock', $member );
-			return TRUE;
+			try
+			{
+				$topic->modAction( 'unlock', $member );
+			}
+			catch ( OutOfRangeException | InvalidArgumentException $e )
+			{
+				Log::log( $e, 'markassold' );
+				return FALSE;
+			}
 		}
-		catch ( OutOfRangeException | InvalidArgumentException $e )
+		elseif ( $topic->isLargeTopic() )
 		{
-			Log::log( $e, 'markassold' );
+			/* IPS never lets oversized topics be unlocked (Topic::canUnlock); respect that */
 			return FALSE;
 		}
+		else
+		{
+			$topic->state            = 'open';
+			$topic->topic_close_time = 0;
+			$topic->save();
+			Event::fire( 'onStatusChange', $topic, array( 'unlock' ) );
+			Session::i()->modLog( 'modlog__markassold_unlock', array( Topic::$title => TRUE, (string) $topic->url() => FALSE, (string) $topic->mapped( 'title' ) => FALSE ), $topic );
+		}
+
+		Application::clearAppLock( $topic );
+		return TRUE;
 	}
 
 	/**

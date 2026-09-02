@@ -1,0 +1,7 @@
+# Keep LF in the repository and on checkout: the PowerShell deploy script sends
+# a bash script over ssh and must not carry CR characters.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.gif binary
+*.tar binary

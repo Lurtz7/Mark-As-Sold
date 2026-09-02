@@ -9,9 +9,11 @@ namespace IPS\markassold;
 
 use IPS\Application as SystemApplication;
 use IPS\Content\Tag;
+use IPS\Db;
 use IPS\forums\Topic;
 use IPS\Member;
 use IPS\Settings;
+use UnderflowException;
 
 /* To prevent PHP errors (extending class does not exist) revealing path */
 if ( !defined( '\IPS\SUITE_UNIQUE_KEY' ) )
@@ -122,6 +124,75 @@ class Application extends SystemApplication
 	}
 
 	/**
+	 * The app's own lock record for a topic: present when the app applied the current lock
+	 *
+	 * @param	Topic	$topic
+	 * @return	array|NULL	lock_topic_id, lock_member_id, lock_time
+	 */
+	public static function appLock( Topic $topic ): ?array
+	{
+		try
+		{
+			return Db::i()->select( '*', 'markassold_locks', array( 'lock_topic_id=?', (int) $topic->tid ) )->first();
+		}
+		catch ( UnderflowException $e )
+		{
+			return NULL;
+		}
+	}
+
+	/**
+	 * Record that the app locked a topic
+	 *
+	 * @param	Topic	$topic
+	 * @param	Member	$member	Member who marked the topic
+	 * @return	void
+	 */
+	public static function recordAppLock( Topic $topic, Member $member ): void
+	{
+		Db::i()->replace( 'markassold_locks', array(
+			'lock_topic_id'  => (int) $topic->tid,
+			'lock_member_id' => (int) $member->member_id,
+			'lock_time'      => time(),
+		) );
+	}
+
+	/**
+	 * Forget the app's lock record for a topic
+	 *
+	 * @param	Topic	$topic
+	 * @return	void
+	 */
+	public static function clearAppLock( Topic $topic ): void
+	{
+		Db::i()->delete( 'markassold_locks', array( 'lock_topic_id=?', (int) $topic->tid ) );
+	}
+
+	/**
+	 * Has a moderator locked the topic through IPS's own lock action after the given time?
+	 *
+	 * @param	Topic	$topic
+	 * @param	int		$since	Unix timestamp
+	 * @return	bool
+	 */
+	public static function moderatorLockedAfter( Topic $topic, int $since ): bool
+	{
+		return (bool) Db::i()->select( 'COUNT(*)', 'core_moderator_logs', array( 'class=? AND item_id=? AND lang_key=? AND ctime>?', Topic::class, (int) $topic->tid, 'modlog__action_lock', $since ) )->first();
+	}
+
+	/**
+	 * May the author release the topic's current lock? Only if the app applied it and no moderator locked it since.
+	 *
+	 * @param	Topic	$topic
+	 * @return	bool
+	 */
+	public static function authorMayReleaseLock( Topic $topic ): bool
+	{
+		$lock = static::appLock( $topic );
+		return TagLogic::lockIsReleasable( $lock !== NULL, $lock ? static::moderatorLockedAfter( $topic, (int) $lock['lock_time'] ) : FALSE );
+	}
+
+	/**
 	 * Is the member a moderator who may lock or unlock topics in this topic's forum?
 	 * Uses the same permission resolution as \IPS\Content\Lockable (global can_lock_content
 	 * or the per-forum moderator permission), so restricted moderators are handled correctly.
@@ -194,11 +265,11 @@ class Application extends SystemApplication
 		}
 
 		/*
-		 * A locked topic is a moderation state: the author may only change the tag if IPS would let
-		 * them unlock it themselves ("Can lock and unlock own content?"), mirroring the lock check in
-		 * \IPS\Content\Item::couldEdit(). This is what stops an author from undoing a moderator's lock.
+		 * A locked topic is a moderation state. The author may only touch it if IPS would let them
+		 * unlock it themselves, or if the lock is one this app applied for them (and no moderator has
+		 * locked the topic since). This is what stops an author from undoing a moderator's lock.
 		 */
-		if ( $topic->locked() and !$topic->canUnlock( $member ) )
+		if ( $topic->locked() and !$topic->canUnlock( $member ) and !static::authorMayReleaseLock( $topic ) )
 		{
 			return FALSE;
 		}
