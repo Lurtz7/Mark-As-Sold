@@ -87,14 +87,17 @@ php -d extension_dir=<php-dir>/ext -d extension=mbstring dev/tests/run.php
 `dev/tools/deploy.ps1` does the whole release from a Windows machine with a local `IN_DEV` install (Laragon):
 
 ```
-pwsh dev/tools/deploy.ps1                   # build, rehearse the upgrade locally, deploy over SSH
+pwsh dev/tools/deploy.ps1                   # build and deploy over SSH (no local database needed)
 pwsh dev/tools/deploy.ps1 -BuildOnly        # only produce the .tar for manual upload via AdminCP
 pwsh dev/tools/deploy.ps1 -NoPhpFpmRestart  # skip the php-fpm restart at the end
+pwsh dev/tools/deploy.ps1 -Full             # build through a local IN_DEV install + MySQL instead
 ```
 
-It runs the unit tests, syncs the repository into the local dev install, builds the package the same way Developer Center > Build does (`dev/tools/build.php`) and checks its contents, then rehearses the upgrade routine against the local dev database before touching the server. On the server it backs up the live app, removes files that are no longer in the package, extracts the package, normalises ownership and permissions, runs the AdminCP upgrade routine as the web server user (`dev/tools/remote-upgrade.php`) and restarts php-fpm so opcache serves the new files. The upgrade routine is what a plain file copy misses: it creates new tables (from `setup/upg_<version>/queries.json`), settings rows, language strings and templates, records the version and clears caches.
+By default the script needs no local IPS database: it runs the unit tests, stages the repository without `dev/` and `.git`, generates `data/lang.xml`, `theme.xml`, `javascript.xml` and `emails.xml` from `dev/` with plain PHP (`dev/tools/make-package-data.php`, the same files Developer Center > Build would produce for this app), tars it and checks the package. With `-Full` it instead syncs the repository into the local dev install, runs the real Developer Center build (`dev/tools/build.php`) and rehearses the upgrade routine against the local database first; use that if the app ever gets templates or javascript.
 
-Requirements: MySQL running locally (the build and the rehearsal use the dev database), `ssh`/`scp` on this machine, a `php` CLI on the server, and sudo rights there. Server, paths and PHP location are parameters with defaults at the top of the script. Bump `data/versions.json` for every release so the AdminCP shows which build is installed, and put any schema change for that version in `setup/upg_<long version>/queries.json`. The script refuses to deploy an uncommitted working tree unless `-AllowDirty` is given, and refuses packages that contain custom upgrade routines (`upgrade.php`); those must go through the AdminCP upgrader.
+On the server it backs up the live app, removes files that are no longer in the package, extracts the package, normalises ownership and permissions, runs the AdminCP upgrade routine as the web server user (`dev/tools/remote-upgrade.php`) and restarts php-fpm so opcache serves the new files. The upgrade routine is what a plain file copy misses: it creates new tables (from `setup/upg_<version>/queries.json`), settings rows, language strings and templates, records the version, clears caches, and fails loudly if any of that is missing afterwards.
+
+Requirements: PHP CLI on this machine, `ssh`/`scp`, a `php` CLI on the server, and sudo rights there. Server, paths and PHP location are parameters with defaults at the top of the script. Bump `data/versions.json` for every release so the AdminCP shows which build is installed, and put any schema change for that version in `setup/upg_<long version>/queries.json`. The script refuses to deploy an uncommitted working tree unless `-AllowDirty` is given, and refuses packages that contain custom upgrade routines (`upgrade.php`); those must go through the AdminCP upgrader.
 
 Rollback: the script prints the backup path (`~/markassold-backup-<stamp>.tgz` on the server). Restore it with `sudo tar -xzf <backup> -C <web root>/applications`, then re-upload the previous package in the AdminCP so its settings and language strings are reinstalled. Tables added by a newer version can stay.
 

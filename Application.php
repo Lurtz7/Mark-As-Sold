@@ -142,7 +142,12 @@ class Application extends SystemApplication
 	}
 
 	/**
-	 * Record that the app locked a topic
+	 * Moderator-log keys written by this app itself
+	 */
+	public const OWN_LOG_KEYS = array( 'modlog__markassold_lock', 'modlog__markassold_unlock' );
+
+	/**
+	 * Record that the app locked a topic, with the scheduled close time as a fingerprint
 	 *
 	 * @param	Topic	$topic
 	 * @param	Member	$member	Member who marked the topic
@@ -151,9 +156,10 @@ class Application extends SystemApplication
 	public static function recordAppLock( Topic $topic, Member $member ): void
 	{
 		Db::i()->replace( 'markassold_locks', array(
-			'lock_topic_id'  => (int) $topic->tid,
-			'lock_member_id' => (int) $member->member_id,
-			'lock_time'      => time(),
+			'lock_topic_id'   => (int) $topic->tid,
+			'lock_member_id'  => (int) $member->member_id,
+			'lock_time'       => time(),
+			'lock_close_time' => (int) $topic->topic_close_time,
 		) );
 	}
 
@@ -169,19 +175,39 @@ class Application extends SystemApplication
 	}
 
 	/**
-	 * Has a moderator locked the topic through IPS's own lock action after the given time?
+	 * Drop a stale lock record: the topic is not locked, so whoever unlocked it ended our lock
+	 *
+	 * @param	Topic	$topic
+	 * @return	void
+	 */
+	public static function syncAppLock( Topic $topic ): void
+	{
+		if ( !$topic->locked() and static::appLock( $topic ) !== NULL )
+		{
+			static::clearAppLock( $topic );
+		}
+	}
+
+	/**
+	 * Has anyone other than this app performed a logged moderation action on the topic after the given time?
+	 * (Covers IPS's lock/unlock actions and saved actions alike.)
 	 *
 	 * @param	Topic	$topic
 	 * @param	int		$since	Unix timestamp
 	 * @return	bool
 	 */
-	public static function moderatorLockedAfter( Topic $topic, int $since ): bool
+	public static function foreignModActionAfter( Topic $topic, int $since ): bool
 	{
-		return (bool) Db::i()->select( 'COUNT(*)', 'core_moderator_logs', array( 'class=? AND item_id=? AND lang_key=? AND ctime>?', Topic::class, (int) $topic->tid, 'modlog__action_lock', $since ) )->first();
+		return (bool) Db::i()->select( 'COUNT(*)', 'core_moderator_logs', array(
+			array( 'class=? AND item_id=? AND ctime>?', Topic::class, (int) $topic->tid, $since ),
+			array( Db::i()->in( 'lang_key', static::OWN_LOG_KEYS, TRUE ) ),
+		) )->first();
 	}
 
 	/**
-	 * May the author release the topic's current lock? Only if the app applied it and no moderator locked it since.
+	 * May the app release the topic's current lock on the author's behalf?
+	 * Only its own recorded lock, untouched by any other moderation action, with the scheduled
+	 * close time unchanged (scheduled locks write no log entry, so the fingerprint catches them).
 	 *
 	 * @param	Topic	$topic
 	 * @return	bool
@@ -189,7 +215,15 @@ class Application extends SystemApplication
 	public static function authorMayReleaseLock( Topic $topic ): bool
 	{
 		$lock = static::appLock( $topic );
-		return TagLogic::lockIsReleasable( $lock !== NULL, $lock ? static::moderatorLockedAfter( $topic, (int) $lock['lock_time'] ) : FALSE );
+		if ( $lock === NULL )
+		{
+			return FALSE;
+		}
+		return TagLogic::lockIsReleasable(
+			TRUE,
+			static::foreignModActionAfter( $topic, (int) $lock['lock_time'] ),
+			(int) $topic->topic_close_time === (int) $lock['lock_close_time']
+		);
 	}
 
 	/**
@@ -222,8 +256,8 @@ class Application extends SystemApplication
 			return FALSE;
 		}
 
-		/* Only real, visible topics: not moved shadows or merged rows, not hidden or pending approval */
-		if ( !TagLogic::isTogglableState( $topic->state ) or $topic->hidden() !== 0 )
+		/* Only real, visible topics: not moved shadows or merged rows, not hidden or pending approval, not archived */
+		if ( !TagLogic::isTogglableState( $topic->state ) or $topic->hidden() !== 0 or $topic->isArchived() )
 		{
 			return FALSE;
 		}
@@ -266,9 +300,10 @@ class Application extends SystemApplication
 
 		/*
 		 * A locked topic is a moderation state. The author may only touch it if IPS would let them
-		 * unlock it themselves, or if the lock is one this app applied for them (and no moderator has
-		 * locked the topic since). This is what stops an author from undoing a moderator's lock.
+		 * unlock it themselves, or if the lock is one this app applied for them and nobody else has
+		 * touched since. This is what stops an author from undoing a moderator's lock.
 		 */
+		static::syncAppLock( $topic );
 		if ( $topic->locked() and !$topic->canUnlock( $member ) and !static::authorMayReleaseLock( $topic ) )
 		{
 			return FALSE;

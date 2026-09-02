@@ -8,8 +8,10 @@
 namespace IPS\markassold\modules\front\markassold;
 
 use InvalidArgumentException;
+use IPS\Application as SystemApplication;
 use IPS\Content\Search\Index;
 use IPS\Content\Search\SearchContent;
+use IPS\Db;
 use IPS\Dispatcher\Controller;
 use IPS\Events\Event;
 use IPS\forums\Topic;
@@ -113,18 +115,17 @@ class toggle extends Controller
 
 			if ( $topic->locked() )
 			{
-				/* Release only the app's own lock, and only when no other auto-lock tag still holds the topic */
+				/* Release only the app's own, untouched lock, and only when no other auto-lock tag still holds the topic */
 				$otherRemains = TagLogic::otherAutolockTagRemains( Application::getTagConfigsForForum( (int) $topic->forum_id ), $canonicalTag, $topic->tags(), $topic->prefix() );
-				$lock         = Application::appLock( $topic );
-				$modAfter     = $lock ? Application::moderatorLockedAfter( $topic, (int) $lock['lock_time'] ) : FALSE;
+				$releasable   = Application::authorMayReleaseLock( $topic );
 
-				if ( TagLogic::shouldUnlockOnUnmark( $autolock, TRUE, $otherRemains, $lock !== NULL, $modAfter ) )
+				if ( TagLogic::shouldUnlockOnUnmark( $autolock, TRUE, $otherRemains, $releasable ) )
 				{
 					$lockChanged = $this->_unlock( $topic, $member );
 				}
 				elseif ( $autolock and !$otherRemains )
 				{
-					/* Locked by a moderator (or re-locked after our lock): leave it, and say so */
+					/* Locked by a moderator, or touched by one after our lock: leave it, and say so */
 					$lockChanged = FALSE;
 				}
 			}
@@ -194,10 +195,38 @@ class toggle extends Controller
 			$topic->save();
 			Event::fire( 'onStatusChange', $topic, array( 'lock' ) );
 			Session::i()->modLog( 'modlog__markassold_lock', array( Topic::$title => TRUE, (string) $topic->url() => FALSE, (string) $topic->mapped( 'title' ) => FALSE ), $topic );
+			$this->_syncCmsRecords( $topic, TRUE );
 		}
 
 		Application::recordAppLock( $topic, $member );
 		return TRUE;
+	}
+
+	/**
+	 * Keep Pages database records that are linked to the topic in step with its lock state,
+	 * as Topic::modAction() does after a lock/unlock.
+	 *
+	 * @param	Topic	$topic
+	 * @param	bool	$locked
+	 * @return	void
+	 */
+	protected function _syncCmsRecords( Topic $topic, bool $locked ): void
+	{
+		if ( !SystemApplication::appIsEnabled( 'cms' ) )
+		{
+			return;
+		}
+		foreach ( Db::i()->select( '*', 'cms_databases', array( 'database_forum_record=? AND database_forum_comments=?', 1, 1 ) ) as $database )
+		{
+			try
+			{
+				$class  = '\IPS\cms\Records' . $database['database_id'];
+				$record = $class::load( $topic->tid, 'record_topicid' );
+				$record->record_locked = $locked ? 1 : 0;
+				$record->save();
+			}
+			catch ( OutOfRangeException $e ) {}
+		}
 	}
 
 	/**
@@ -233,6 +262,7 @@ class toggle extends Controller
 			$topic->save();
 			Event::fire( 'onStatusChange', $topic, array( 'unlock' ) );
 			Session::i()->modLog( 'modlog__markassold_unlock', array( Topic::$title => TRUE, (string) $topic->url() => FALSE, (string) $topic->mapped( 'title' ) => FALSE ), $topic );
+			$this->_syncCmsRecords( $topic, FALSE );
 		}
 
 		Application::clearAppLock( $topic );

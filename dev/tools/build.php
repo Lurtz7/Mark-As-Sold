@@ -50,6 +50,10 @@ try
 {
 	$app = \IPS\Application::load( $appDir );
 
+	/* build() records the package version in the local database; report what was installed before, so a
+	   local rehearsal of remote-upgrade.php can still run the upgrade steps for this version (--from=) */
+	echo "Previously installed: {$app->version} ({$app->long_version})\n";
+
 	/* Same as the Developer Center "Build" button */
 	$app->build();
 

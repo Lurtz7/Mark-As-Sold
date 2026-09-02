@@ -256,31 +256,32 @@ class TagLogic
 
 	/**
 	 * Is the current lock one the app may release on the author's behalf?
-	 * Only a lock the app itself recorded, and not if a moderator locked the topic since.
+	 * Only a lock the app itself recorded, with no moderation action by anyone else on the topic
+	 * since, and with the scheduled close time unchanged (scheduled locks write no log entry).
 	 *
 	 * @param	bool	$appLocked				The app's own lock record exists for the topic
-	 * @param	bool	$moderatorLockedAfter	A moderator lock action was logged after that record
+	 * @param	bool	$foreignActionAfter		A moderator-log entry not written by this app exists after that record
+	 * @param	bool	$fingerprintMatches		The topic's scheduled close time equals the one recorded with the lock
 	 * @return	bool
 	 */
-	public static function lockIsReleasable( bool $appLocked, bool $moderatorLockedAfter ): bool
+	public static function lockIsReleasable( bool $appLocked, bool $foreignActionAfter, bool $fingerprintMatches ): bool
 	{
-		return $appLocked && !$moderatorLockedAfter;
+		return $appLocked && !$foreignActionAfter && $fingerprintMatches;
 	}
 
 	/**
 	 * Should unmarking unlock the topic? Only when the slot auto-locks, the topic is locked,
-	 * no other auto-lock tag is still holding it, and the lock is the app's own (see lockIsReleasable).
+	 * no other auto-lock tag is still holding it, and the lock is releasable (see lockIsReleasable).
 	 *
 	 * @param	bool	$autolock				Slot setting
 	 * @param	bool	$locked					Current lock state
 	 * @param	bool	$otherAutolockRemains	See otherAutolockTagRemains()
-	 * @param	bool	$appLocked				The app's own lock record exists
-	 * @param	bool	$moderatorLockedAfter	A moderator locked the topic after that record
+	 * @param	bool	$releasable				See lockIsReleasable()
 	 * @return	bool
 	 */
-	public static function shouldUnlockOnUnmark( bool $autolock, bool $locked, bool $otherAutolockRemains, bool $appLocked, bool $moderatorLockedAfter ): bool
+	public static function shouldUnlockOnUnmark( bool $autolock, bool $locked, bool $otherAutolockRemains, bool $releasable ): bool
 	{
-		return $autolock && $locked && !$otherAutolockRemains && static::lockIsReleasable( $appLocked, $moderatorLockedAfter );
+		return $autolock && $locked && !$otherAutolockRemains && $releasable;
 	}
 
 	/**

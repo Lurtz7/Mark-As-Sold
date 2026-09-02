@@ -37,6 +37,18 @@
                 "comment": "Unix timestamp of the lock",
                 "unsigned": true,
                 "auto_increment": false
+            },
+            "lock_close_time": {
+                "name": "lock_close_time",
+                "type": "INT",
+                "length": 10,
+                "decimals": null,
+                "values": null,
+                "allow_null": false,
+                "default": 0,
+                "comment": "forums_topics.topic_close_time when the lock was applied (fingerprint)",
+                "unsigned": true,
+                "auto_increment": false
             }
         },
         "indexes": {
